@@ -1,162 +1,260 @@
-```html
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
-
   <meta charset="UTF-8">
+  <!-- iPadでのピンチズームなどを防ぎ、アプリのように振る舞わせる設定 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>スマート勤怠管理</title>
 
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1.0">
-
-  <title>勤怠管理</title>
-
+  <!-- Tailwind CSS (モダンなデザインを簡単に適用するためのフレームワーク) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- HTML5 QR Code -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8"></script>
+  
+  <!-- Google Fonts (美しく読みやすい日本語フォント) -->
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons (美しいアイコン) -->
+  <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
-
     body {
-      font-family: sans-serif;
-      text-align: center;
-      margin-top: 20px;
-      background: #f5f5f5;
+      font-family: 'Noto Sans JP', sans-serif;
+      /* 背景の微細なグラデーション */
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
     }
 
-    h1 {
-      margin-bottom: 10px;
-    }
-
+    /* QRコードリーダーの見た目をカスタマイズ */
     #reader {
-      width: 300px;
-      margin: auto;
+      border: none !important;
+      border-radius: 1rem;
+      overflow: hidden;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
       background: white;
-      padding: 10px;
-      border-radius: 10px;
     }
-
-    #result {
-      margin-top: 20px;
-      font-size: 24px;
-      color: green;
-      padding: 10px;
+    #reader video {
+      object-fit: cover;
+      border-radius: 1rem;
     }
-
+    
+    /* トースト通知のアニメーション */
+    @keyframes slideUp {
+      from { transform: translate(-50%, 100%); opacity: 0; }
+      to { transform: translate(-50%, 0); opacity: 1; }
+    }
+    .toast-enter {
+      animation: slideUp 0.3s ease-out forwards;
+    }
   </style>
-
 </head>
 
-<body>
+<body class="h-screen w-screen overflow-hidden flex flex-col text-slate-800">
 
-  <h1>勤怠管理</h1>
+  <!-- ==================== メイン画面（時計とボタン） ==================== -->
+  <div id="main-screen" class="flex-1 flex flex-col items-center justify-center transition-opacity duration-300">
+    
+    <!-- 時計表示 -->
+    <div class="mb-16 text-center">
+      <div id="current-date" class="text-2xl font-medium text-slate-500 mb-2"></div>
+      <div id="current-time" class="text-7xl font-bold tracking-wider text-slate-700"></div>
+    </div>
 
-  <p>QRコードをかざしてください</p>
+    <div class="text-xl font-medium text-slate-600 mb-8">打刻メニューを選択してください</div>
 
-  <div id="reader"></div>
+    <!-- ボタン群 -->
+    <div class="flex gap-8 w-full max-w-2xl px-8">
+      <!-- 出勤ボタン -->
+      <button onclick="startScanning('出勤')" class="flex-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-3xl p-10 flex flex-col items-center justify-center shadow-xl transition-transform transform active:scale-95">
+        <i data-lucide="sun" class="w-16 h-16 mb-4"></i>
+        <span class="text-3xl font-bold">出勤</span>
+      </button>
 
-  <div id="result"></div>
+      <!-- 退勤ボタン -->
+      <button onclick="startScanning('退勤')" class="flex-1 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white rounded-3xl p-10 flex flex-col items-center justify-center shadow-xl transition-transform transform active:scale-95">
+        <i data-lucide="moon" class="w-16 h-16 mb-4"></i>
+        <span class="text-3xl font-bold">退勤</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== スキャン画面（カメラ起動時） ==================== -->
+  <div id="scan-screen" class="hidden absolute inset-0 bg-white z-10 flex flex-col">
+    <!-- ヘッダー -->
+    <div class="bg-white shadow-sm p-6 flex items-center justify-between z-20">
+      <button onclick="stopScanning()" class="flex items-center text-slate-500 hover:text-slate-800 px-4 py-2 rounded-lg bg-slate-100 font-medium">
+        <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i> 戻る
+      </button>
+      <div class="text-2xl font-bold text-slate-800" id="scan-title">スキャン画面</div>
+      <div class="w-24"></div> <!-- 中央揃えのためのスペーサー -->
+    </div>
+
+    <!-- カメラスペース -->
+    <div class="flex-1 flex flex-col items-center justify-center bg-slate-50 p-6">
+      <p class="text-lg text-slate-600 mb-6" id="scan-instruction">社員証のQRコードをかざしてください</p>
+      
+      <!-- リーダー表示領域 -->
+      <div id="reader" style="width: 100%; max-width: 500px; aspect-ratio: 4/3;"></div>
+    </div>
+  </div>
+
+  <!-- ==================== ローディング・通知表示 ==================== -->
+  <!-- 送信中オーバーレイ -->
+  <div id="loading-overlay" class="hidden absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+    <i data-lucide="loader-2" class="w-16 h-16 text-blue-600 animate-spin mb-4"></i>
+    <div class="text-xl font-bold text-slate-700">データを送信中...</div>
+  </div>
+
+  <!-- 結果トースト（画面下部からポップアップ） -->
+  <div id="toast" class="hidden fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-8 py-4 rounded-full shadow-2xl z-50 flex items-center gap-3 text-lg font-bold">
+    <i data-lucide="check-circle" class="w-6 h-6"></i>
+    <span id="toast-message">処理が完了しました</span>
+  </div>
 
   <script>
+    // Lucideアイコンの初期化
+    lucide.createIcons();
 
-    let lastScan = "";
+    // 状態管理変数
+    let html5QrCode = null;
+    let currentAction = ""; // "出勤" または "退勤"
+    let isProcessing = false; // 連続読み取り防止フラグ
 
-    function onScanSuccess(decodedText) {
+    // --- 時計の処理 ---
+    function updateClock() {
+      const now = new Date();
+      const days = ['日', '月', '火', '水', '木', '金', '土'];
+      
+      const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 (${days[now.getDay()]})`;
+      const timeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      
+      document.getElementById('current-date').innerText = dateStr;
+      document.getElementById('current-time').innerText = timeStr;
+    }
+    setInterval(updateClock, 1000);
+    updateClock(); // 初回実行
 
-      // 同じQR連続読み取り防止
-      if (decodedText === lastScan) {
-        return;
+    // --- 画面切り替え ---
+    function showScreen(screenId) {
+      document.getElementById('main-screen').classList.add('hidden');
+      document.getElementById('scan-screen').classList.add('hidden');
+      document.getElementById(screenId).classList.remove('hidden');
+    }
+
+    // --- トースト通知表示 ---
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-message');
+      
+      toast.className = `fixed bottom-10 left-1/2 transform -translate-x-1/2 px-8 py-4 rounded-full shadow-2xl z-50 flex items-center gap-3 text-lg font-bold toast-enter ${isError ? 'bg-red-600' : 'bg-green-600'} text-white`;
+      toastMsg.innerText = message;
+      
+      toast.classList.remove('hidden');
+      
+      setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 3000);
+    }
+
+    // --- スキャン開始処理 ---
+    function startScanning(action) {
+      currentAction = action;
+      isProcessing = false;
+
+      // UIの更新
+      document.getElementById('scan-title').innerText = `${action} スキャン`;
+      document.getElementById('scan-instruction').innerText = `${action}を記録します。QRコードをかざしてください`;
+      showScreen('scan-screen');
+
+      // QRコードリーダーの初期化
+      if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("reader");
       }
 
-      lastScan = decodedText;
+      // iPadのインカメラを使用する場合は { facingMode: "user" }
+      // 背面カメラを使用する場合は { facingMode: "environment" }
+      const cameraConfig = { facingMode: "user" }; 
 
-      document.getElementById("result")
-        .innerHTML =
-          "読み取り成功<br><br>" + decodedText;
+      html5QrCode.start(
+        cameraConfig,
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 }
+        },
+        onScanSuccess,
+        onScanError
+      ).catch(err => {
+        console.error("カメラ起動エラー:", err);
+        alert("カメラの起動に失敗しました。カメラのアクセス許可を確認してください。");
+        stopScanning();
+      });
+    }
 
-      // Google Apps Scriptへ送信
-      fetch("https://script.google.com/macros/s/AKfycbwI-_gf_xbNvvPUnFYIZY97GfjthFzvl5DKWOdRYVv8Zt35YrGlFe-5SapZS4Eo5w6P0Q/exec", {
+    // --- スキャン終了（戻る）処理 ---
+    function stopScanning() {
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+          showScreen('main-screen');
+        }).catch(err => {
+          console.error("カメラ停止エラー:", err);
+          showScreen('main-screen');
+        });
+      } else {
+        showScreen('main-screen');
+      }
+    }
 
+    // --- 読み取り成功時の処理 ---
+    function onScanSuccess(decodedText) {
+      if (isProcessing) return; // 処理中は次の読み取りを無視
+      isProcessing = true;
+
+      // 一旦カメラを止める（画面はそのまま）
+      if (html5QrCode.isScanning) {
+        html5QrCode.stop();
+      }
+
+      // ローディング表示
+      document.getElementById('loading-overlay').classList.remove('hidden');
+
+      // GASへの送信データ作成
+      // ※注意: GAS側でどちらの打刻か判定できるように type を追加しています
+      const payload = {
+        employeeId: decodedText,
+        type: currentAction // "出勤" or "退勤"
+      };
+
+      // GASのURL (既存のものをそのまま使用)
+      const gasUrl = "https://script.google.com/macros/s/AKfycbwI-_gf_xbNvvPUnFYIZY97GfjthFzvl5DKWOdRYVv8Zt35YrGlFe-5SapZS4Eo5w6P0Q/exec";
+
+      fetch(gasUrl, {
         method: "POST",
-
-        body: JSON.stringify({
-          employeeId: decodedText
-        })
-
+        body: JSON.stringify(payload)
       })
-
       .then(response => response.text())
-
       .then(data => {
-
-        console.log(data);
-
-        document.getElementById("result")
-          .innerHTML +=
-            "<br><br>保存しました";
-
-        // 3秒後に解除
-        setTimeout(() => {
-          lastScan = "";
-        }, 3000);
-
+        console.log("送信成功:", data);
+        document.getElementById('loading-overlay').classList.add('hidden');
+        
+        // 成功通知を表示してメイン画面に戻る
+        showToast(`${currentAction}を記録しました`);
+        showScreen('main-screen');
       })
-
       .catch(error => {
-
-        console.error(error);
-
-        document.getElementById("result")
-          .innerHTML +=
-            "<br><br>保存エラー";
-
-        setTimeout(() => {
-          lastScan = "";
-        }, 3000);
-
+        console.error("送信エラー:", error);
+        document.getElementById('loading-overlay').classList.add('hidden');
+        
+        // エラー通知を表示してメイン画面に戻る
+        showToast("通信エラーが発生しました", true);
+        showScreen('main-screen');
       });
     }
 
+    // --- 読み取りエラー（無視してOK） ---
     function onScanError(errorMessage) {
-      // 無視
+      // 常にスキャンし続けているため、QRが見つからないエラーは無視します
     }
-
-    const html5QrCode =
-      new Html5Qrcode("reader");
-
-    Html5Qrcode.getCameras()
-
-      .then(devices => {
-
-        if (devices && devices.length) {
-
-          html5QrCode.start(
-
-            devices[0].id,
-
-            {
-              fps: 10,
-              qrbox: 250
-            },
-
-            onScanSuccess,
-            onScanError
-
-          );
-        }
-      })
-
-      .catch(err => {
-
-        console.error(err);
-
-        document.getElementById("result")
-          .innerHTML =
-            "カメラエラー<br><br>" + err;
-
-      });
 
   </script>
-
 </body>
-
 </html>
-```
