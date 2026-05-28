@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
+
+  <title>勤怠管理</title>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8"></script>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    #reader {
+      width: 300px;
+      margin: auto;
+    }
+
+    #result {
+      margin-top: 20px;
+      font-size: 24px;
+      color: green;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>勤怠管理</h1>
+
+  <p>QRコードをかざしてください</p>
+
+  <div id="reader"></div>
+
+  <div id="result"></div>
+
+  <script>
+
+    function onScanSuccess(decodedText) {
+
+      document.getElementById("result")
+        .innerHTML =
+          "読み取り成功:<br>" + decodedText;
+    }
+
+    function onScanError(errorMessage) {
+      // 無視
+    }
+
+    const html5QrCode =
+      new Html5Qrcode("reader");
+
+    Html5Qrcode.getCameras()
+      .then(devices => {
+
+        if (devices && devices.length) {
+
+          html5QrCode.start(
+            devices[0].id,
+            {
+              fps: 10,
+              qrbox: 250
+            },
+            onScanSuccess,
+            onScanError
+          );
+        }
+      })
+      .catch(err => {
+
+        document.getElementById("result")
+          .innerHTML =
+            "カメラエラー:<br>" + err;
+      });
+
+  </script>
+
+</body>
+</html>
