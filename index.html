@@ -1,7 +1,11 @@
+```html
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
+
   <meta charset="UTF-8">
+
   <meta name="viewport"
         content="width=device-width, initial-scale=1.0">
 
@@ -10,23 +14,35 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8"></script>
 
   <style>
+
     body {
       font-family: sans-serif;
       text-align: center;
       margin-top: 20px;
+      background: #f5f5f5;
+    }
+
+    h1 {
+      margin-bottom: 10px;
     }
 
     #reader {
       width: 300px;
       margin: auto;
+      background: white;
+      padding: 10px;
+      border-radius: 10px;
     }
 
     #result {
       margin-top: 20px;
       font-size: 24px;
       color: green;
+      padding: 10px;
     }
+
   </style>
+
 </head>
 
 <body>
@@ -41,11 +57,62 @@
 
   <script>
 
+    let lastScan = "";
+
     function onScanSuccess(decodedText) {
+
+      // 同じQR連続読み取り防止
+      if (decodedText === lastScan) {
+        return;
+      }
+
+      lastScan = decodedText;
 
       document.getElementById("result")
         .innerHTML =
-          "読み取り成功:<br>" + decodedText;
+          "読み取り成功<br><br>" + decodedText;
+
+      // Google Apps Scriptへ送信
+      fetch("https://script.google.com/macros/s/AKfycbwI-_gf_xbNvvPUnFYIZY97GfjthFzvl5DKWOdRYVv8Zt35YrGlFe-5SapZS4Eo5w6P0Q/exec", {
+
+        method: "POST",
+
+        body: JSON.stringify({
+          employeeId: decodedText
+        })
+
+      })
+
+      .then(response => response.text())
+
+      .then(data => {
+
+        console.log(data);
+
+        document.getElementById("result")
+          .innerHTML +=
+            "<br><br>保存しました";
+
+        // 3秒後に解除
+        setTimeout(() => {
+          lastScan = "";
+        }, 3000);
+
+      })
+
+      .catch(error => {
+
+        console.error(error);
+
+        document.getElementById("result")
+          .innerHTML +=
+            "<br><br>保存エラー";
+
+        setTimeout(() => {
+          lastScan = "";
+        }, 3000);
+
+      });
     }
 
     function onScanError(errorMessage) {
@@ -56,29 +123,40 @@
       new Html5Qrcode("reader");
 
     Html5Qrcode.getCameras()
+
       .then(devices => {
 
         if (devices && devices.length) {
 
           html5QrCode.start(
+
             devices[0].id,
+
             {
               fps: 10,
               qrbox: 250
             },
+
             onScanSuccess,
             onScanError
+
           );
         }
       })
+
       .catch(err => {
+
+        console.error(err);
 
         document.getElementById("result")
           .innerHTML =
-            "カメラエラー:<br>" + err;
+            "カメラエラー<br><br>" + err;
+
       });
 
   </script>
 
 </body>
+
 </html>
+```
