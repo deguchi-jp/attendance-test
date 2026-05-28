@@ -2,201 +2,424 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <!-- iPadでのピンチズームなどを防ぎ、アプリのように振る舞わせる設定 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>スマート勤怠管理</title>
 
-  <!-- Tailwind CSS (モダンなデザインを簡単に適用するためのフレームワーク) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- HTML5 QR Code -->
+  <!-- カメラ読み取りライブラリのみ外部から読み込みます -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8"></script>
-  
-  <!-- Google Fonts (美しく読みやすい日本語フォント) -->
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-  
-  <!-- Lucide Icons (美しいアイコン) -->
-  <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
-    body {
-      font-family: 'Noto Sans JP', sans-serif;
-      /* 背景の微細なグラデーション */
-      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    /* =========================================
+       古いiPad (iOS12) 専用の超安定型CSS
+       ※外部のデザインツールを一切使っていません
+    ========================================= */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
 
-    /* QRコードリーダーの見た目をカスタマイズ */
-    #reader {
-      border: none !important;
-      border-radius: 1rem;
-      overflow: hidden;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-      background: white;
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+      background-color: #f0f4f8; /* グラデーション非対応端末用の単色フォールバック */
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      color: #333333;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden; /* スクロールを禁止してアプリ感を維持 */
+      position: relative;
     }
-    #reader video {
-      object-fit: cover;
-      border-radius: 1rem;
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* 画面全体のレイアウト */
+    .screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+    }
+
+    /* --- メイン画面 --- */
+    .clock-area {
+      text-align: center;
+      margin-bottom: 50px;
+    }
+
+    #current-date {
+      font-size: 24px;
+      color: #64748b;
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+
+    #current-time {
+      font-size: 80px;
+      font-weight: bold;
+      color: #1e293b;
+      letter-spacing: 2px;
+    }
+
+    .instruction-text {
+      font-size: 22px;
+      color: #475569;
+      margin-bottom: 40px;
+      font-weight: 500;
+    }
+
+    /* iOS12のFlexboxバグを回避するためmarginで間隔調整 */
+    .buttons-wrapper {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      max-width: 650px;
+      padding: 0 20px;
+    }
+
+    .btn {
+      width: 46%;
+      margin: 0 2%;
+      border: none;
+      border-radius: 24px;
+      padding: 45px 10px;
+      font-size: 32px;
+      font-weight: bold;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+      -webkit-appearance: none; /* iOSボタンのデフォルトの丸みをリセット */
+    }
+
+    .btn:active {
+      opacity: 0.8;
+      transform: scale(0.96);
+    }
+
+    /* 太陽と月のアイコンSVG用 */
+    .btn svg {
+      width: 70px;
+      height: 70px;
+      margin-bottom: 15px;
+      fill: currentColor;
+    }
+
+    .btn-in { background-color: #2563eb; } /* 出勤：青 */
+    .btn-out { background-color: #ea580c; } /* 退勤：オレンジ */
+
+    /* --- スキャン画面 --- */
+    #scan-screen {
+      background-color: #f8fafc;
+      justify-content: flex-start;
+    }
+
+    .header {
+      width: 100%;
+      height: 80px;
+      background-color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .back-btn {
+      background-color: #f1f5f9;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #475569;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
     }
     
-    /* トースト通知のアニメーション */
-    @keyframes slideUp {
-      from { transform: translate(-50%, 100%); opacity: 0; }
-      to { transform: translate(-50%, 0); opacity: 1; }
+    .back-btn svg {
+      width: 20px;
+      height: 20px;
+      margin-right: 8px;
+      stroke: currentColor;
     }
-    .toast-enter {
-      animation: slideUp 0.3s ease-out forwards;
+
+    .header-title {
+      font-size: 26px;
+      font-weight: bold;
+      color: #0f172a;
+    }
+
+    .spacer {
+      width: 90px; /* 戻るボタンと釣り合いを取るダミースペース */
+    }
+
+    .reader-area {
+      flex: 1;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    #scan-instruction {
+      font-size: 20px;
+      color: #475569;
+      margin-bottom: 24px;
+    }
+
+    #reader {
+      width: 100%;
+      max-width: 420px;
+      background: white;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+      border: none !important;
+    }
+
+    #reader video {
+      border-radius: 20px;
+    }
+
+    /* --- 送信中オーバーレイ --- */
+    #loading {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255, 255, 255, 0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 6px solid #cbd5e1;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+
+    @keyframes spin { 
+      100% { transform: rotate(360deg); } 
+    }
+
+    /* --- トースト通知ポップアップ --- */
+    #toast {
+      position: fixed;
+      bottom: -120px; /* 最初は画面の下に隠す */
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #16a34a; /* 成功時は緑 */
+      color: white;
+      padding: 18px 36px;
+      border-radius: 40px;
+      font-size: 22px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      z-index: 1000;
+      transition: bottom 0.3s ease;
+    }
+
+    #toast.show {
+      bottom: 50px; /* 画面下部にスライド出現 */
+    }
+
+    #toast.error {
+      background-color: #dc2626; /* エラー時は赤 */
+    }
+
+    #toast svg {
+      width: 28px;
+      height: 28px;
+      margin-right: 12px;
+      fill: currentColor;
     }
   </style>
 </head>
+<body>
 
-<body class="h-screen w-screen overflow-hidden flex flex-col text-slate-800">
-
-  <!-- ==================== メイン画面（時計とボタン） ==================== -->
-  <div id="main-screen" class="flex-1 flex flex-col items-center justify-center transition-opacity duration-300">
-    
-    <!-- 時計表示 -->
-    <div class="mb-16 text-center">
-      <div id="current-date" class="text-2xl font-medium text-slate-500 mb-2"></div>
-      <div id="current-time" class="text-7xl font-bold tracking-wider text-slate-700"></div>
+  <!-- ==================== メイン画面 ==================== -->
+  <div id="main-screen" class="screen">
+    <div class="clock-area">
+      <div id="current-date">----年--月--日 (--)</div>
+      <div id="current-time">--:--:--</div>
     </div>
 
-    <div class="text-xl font-medium text-slate-600 mb-8">打刻メニューを選択してください</div>
+    <div class="instruction-text">打刻メニューを選択してください</div>
 
-    <!-- ボタン群 -->
-    <div class="flex gap-8 w-full max-w-2xl px-8">
+    <div class="buttons-wrapper">
       <!-- 出勤ボタン -->
-      <button onclick="startScanning('出勤')" class="flex-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-3xl p-10 flex flex-col items-center justify-center shadow-xl transition-transform transform active:scale-95">
-        <i data-lucide="sun" class="w-16 h-16 mb-4"></i>
-        <span class="text-3xl font-bold">出勤</span>
+      <button class="btn btn-in" onclick="startScanning('出勤')">
+        <!-- 太陽アイコン (SVG直書き) -->
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z" />
+        </svg>
+        出勤
       </button>
 
       <!-- 退勤ボタン -->
-      <button onclick="startScanning('退勤')" class="flex-1 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white rounded-3xl p-10 flex flex-col items-center justify-center shadow-xl transition-transform transform active:scale-95">
-        <i data-lucide="moon" class="w-16 h-16 mb-4"></i>
-        <span class="text-3xl font-bold">退勤</span>
+      <button class="btn btn-out" onclick="startScanning('退勤')">
+        <!-- 月アイコン (SVG直書き) -->
+        <svg viewBox="0 0 24 24">
+          <path d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+        </svg>
+        退勤
       </button>
     </div>
   </div>
 
-  <!-- ==================== スキャン画面（カメラ起動時） ==================== -->
-  <div id="scan-screen" class="hidden absolute inset-0 bg-white z-10 flex flex-col">
-    <!-- ヘッダー -->
-    <div class="bg-white shadow-sm p-6 flex items-center justify-between z-20">
-      <button onclick="stopScanning()" class="flex items-center text-slate-500 hover:text-slate-800 px-4 py-2 rounded-lg bg-slate-100 font-medium">
-        <i data-lucide="arrow-left" class="w-5 h-5 mr-2"></i> 戻る
+  <!-- ==================== スキャン画面 ==================== -->
+  <div id="scan-screen" class="screen hidden">
+    <div class="header">
+      <button class="back-btn" onclick="stopScanning()">
+        <!-- 戻る（左矢印）アイコン -->
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        戻る
       </button>
-      <div class="text-2xl font-bold text-slate-800" id="scan-title">スキャン画面</div>
-      <div class="w-24"></div> <!-- 中央揃えのためのスペーサー -->
+      <div class="header-title" id="scan-title">スキャン</div>
+      <div class="spacer"></div>
     </div>
-
-    <!-- カメラスペース -->
-    <div class="flex-1 flex flex-col items-center justify-center bg-slate-50 p-6">
-      <p class="text-lg text-slate-600 mb-6" id="scan-instruction">社員証のQRコードをかざしてください</p>
-      
-      <!-- リーダー表示領域 -->
-      <div id="reader" style="width: 100%; max-width: 500px; aspect-ratio: 4/3;"></div>
+    <div class="reader-area">
+      <div id="scan-instruction">QRコードをかざしてください</div>
+      <div id="reader"></div>
     </div>
   </div>
 
-  <!-- ==================== ローディング・通知表示 ==================== -->
-  <!-- 送信中オーバーレイ -->
-  <div id="loading-overlay" class="hidden absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
-    <i data-lucide="loader-2" class="w-16 h-16 text-blue-600 animate-spin mb-4"></i>
-    <div class="text-xl font-bold text-slate-700">データを送信中...</div>
+  <!-- ==================== ローディングオーバーレイ ==================== -->
+  <div id="loading" class="hidden">
+    <div class="spinner"></div>
+    <div style="font-size: 22px; font-weight: bold; color: #1e293b;">データを送信中...</div>
   </div>
 
-  <!-- 結果トースト（画面下部からポップアップ） -->
-  <div id="toast" class="hidden fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-8 py-4 rounded-full shadow-2xl z-50 flex items-center gap-3 text-lg font-bold">
-    <i data-lucide="check-circle" class="w-6 h-6"></i>
+  <!-- ==================== トースト通知 ==================== -->
+  <div id="toast">
+    <!-- チェックマークアイコン -->
+    <svg viewBox="0 0 24 24">
+      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+    </svg>
     <span id="toast-message">処理が完了しました</span>
   </div>
 
   <script>
-    // Lucideアイコンの初期化
-    lucide.createIcons();
+    // iOS 12のJSエンジンに完全配慮し、var / standard function だけで記述
+    var html5QrCode = null;
+    var currentAction = ""; 
+    var isProcessing = false;
 
-    // 状態管理変数
-    let html5QrCode = null;
-    let currentAction = ""; // "出勤" または "退勤"
-    let isProcessing = false; // 連続読み取り防止フラグ
-
-    // --- 時計の処理 ---
+    // --- 時計の描画処理 ---
     function updateClock() {
-      const now = new Date();
-      const days = ['日', '月', '火', '水', '木', '金', '土'];
+      var now = new Date();
+      var days = ['日', '月', '火', '水', '木', '金', '土'];
       
-      const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 (${days[now.getDay()]})`;
-      const timeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      var y = now.getFullYear();
+      var m = now.getMonth() + 1;
+      var d = now.getDate();
+      var day = days[now.getDay()];
+      
+      var h = now.getHours();
+      var min = now.getMinutes();
+      var sec = now.getSeconds();
+      
+      // 1桁の数字を2桁に揃える (例: 9 -> 09)
+      if (h < 10) { h = "0" + h; }
+      if (min < 10) { min = "0" + min; }
+      if (sec < 10) { sec = "0" + sec; }
+      
+      var dateStr = y + "年" + m + "月" + d + "日 (" + day + ")";
+      var timeStr = h + ":" + min + ":" + sec;
       
       document.getElementById('current-date').innerText = dateStr;
       document.getElementById('current-time').innerText = timeStr;
     }
+    // 1秒ごとに時計を更新
     setInterval(updateClock, 1000);
-    updateClock(); // 初回実行
+    updateClock(); // 初回起動
 
-    // --- 画面切り替え ---
+    // --- 画面切り替え用の関数 ---
     function showScreen(screenId) {
       document.getElementById('main-screen').classList.add('hidden');
       document.getElementById('scan-screen').classList.add('hidden');
       document.getElementById(screenId).classList.remove('hidden');
     }
 
-    // --- トースト通知表示 ---
-    function showToast(message, isError = false) {
-      const toast = document.getElementById('toast');
-      const toastMsg = document.getElementById('toast-message');
+    // --- トースト通知（完了・失敗）ポップアップ制御 ---
+    function showToast(message, isError) {
+      var toast = document.getElementById('toast');
+      document.getElementById('toast-message').innerText = message;
       
-      toast.className = `fixed bottom-10 left-1/2 transform -translate-x-1/2 px-8 py-4 rounded-full shadow-2xl z-50 flex items-center gap-3 text-lg font-bold toast-enter ${isError ? 'bg-red-600' : 'bg-green-600'} text-white`;
-      toastMsg.innerText = message;
+      if (isError) {
+        toast.classList.add('error');
+      } else {
+        toast.classList.remove('error');
+      }
       
-      toast.classList.remove('hidden');
+      toast.classList.add('show');
       
-      setTimeout(() => {
-        toast.classList.add('hidden');
+      // 3秒後に非表示にする
+      setTimeout(function() {
+        toast.classList.remove('show');
       }, 3000);
     }
 
-    // --- スキャン開始処理 ---
+    // --- カメラ起動プロセス ---
     function startScanning(action) {
       currentAction = action;
       isProcessing = false;
 
-      // UIの更新
-      document.getElementById('scan-title').innerText = `${action} スキャン`;
-      document.getElementById('scan-instruction').innerText = `${action}を記録します。QRコードをかざしてください`;
+      document.getElementById('scan-title').innerText = action + "スキャン";
+      document.getElementById('scan-instruction').innerText = action + "を記録します。QRコードをかざしてください";
       showScreen('scan-screen');
 
-      // QRコードリーダーの初期化
       if (!html5QrCode) {
         html5QrCode = new Html5Qrcode("reader");
       }
 
-      // iPadのインカメラを使用する場合は { facingMode: "user" }
-      // 背面カメラを使用する場合は { facingMode: "environment" }
-      const cameraConfig = { facingMode: "user" }; 
+      // iPadのフロント（イン）カメラを指定
+      var cameraConfig = { facingMode: "user" }; 
 
       html5QrCode.start(
         cameraConfig,
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 }
+        { 
+          fps: 10, 
+          qrbox: 250 
         },
         onScanSuccess,
         onScanError
-      ).catch(err => {
-        console.error("カメラ起動エラー:", err);
-        alert("カメラの起動に失敗しました。カメラのアクセス許可を確認してください。");
+      ).catch(function(err) {
+        console.error("Camera error:", err);
+        alert("カメラの起動に失敗しました。iPadの「設定」＞「Safari」でカメラのアクセス許可がオンになっているか確認してください。");
         stopScanning();
       });
     }
 
-    // --- スキャン終了（戻る）処理 ---
+    // --- スキャンを中止してメインへ戻る ---
     function stopScanning() {
       if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().then(() => {
+        html5QrCode.stop().then(function() {
           showScreen('main-screen');
-        }).catch(err => {
-          console.error("カメラ停止エラー:", err);
+        }).catch(function(err) {
           showScreen('main-screen');
         });
       } else {
@@ -204,56 +427,47 @@
       }
     }
 
-    // --- 読み取り成功時の処理 ---
+    // --- QR読み取り成功時の処理 ---
     function onScanSuccess(decodedText) {
-      if (isProcessing) return; // 処理中は次の読み取りを無視
+      if (isProcessing) return; // 二重読み取り防止
       isProcessing = true;
 
-      // 一旦カメラを止める（画面はそのまま）
+      // 即座にカメラストリームを一時停止
       if (html5QrCode.isScanning) {
         html5QrCode.stop();
       }
 
-      // ローディング表示
-      document.getElementById('loading-overlay').classList.remove('hidden');
+      // 送信中ローディングを表示
+      document.getElementById('loading').classList.remove('hidden');
 
-      // GASへの送信データ作成
-      // ※注意: GAS側でどちらの打刻か判定できるように type を追加しています
-      const payload = {
+      var payload = {
         employeeId: decodedText,
-        type: currentAction // "出勤" or "退勤"
+        type: currentAction
       };
 
-      // GASのURL (既存のものをそのまま使用)
-      const gasUrl = "https://script.google.com/macros/s/AKfycbwI-_gf_xbNvvPUnFYIZY97GfjthFzvl5DKWOdRYVv8Zt35YrGlFe-5SapZS4Eo5w6P0Q/exec";
+      // 既存のGASウェブアプリのURL
+      var gasUrl = "https://script.google.com/macros/s/AKfycbwI-_gf_xbNvvPUnFYIZY97GfjthFzvl5DKWOdRYVv8Zt35YrGlFe-5SapZS4Eo5w6P0Q/exec";
 
       fetch(gasUrl, {
         method: "POST",
         body: JSON.stringify(payload)
       })
-      .then(response => response.text())
-      .then(data => {
-        console.log("送信成功:", data);
-        document.getElementById('loading-overlay').classList.add('hidden');
-        
-        // 成功通知を表示してメイン画面に戻る
-        showToast(`${currentAction}を記録しました`);
+      .then(function(response) { return response.text(); })
+      .then(function(data) {
+        document.getElementById('loading').classList.add('hidden');
+        showToast(currentAction + "を記録しました", false);
         showScreen('main-screen');
       })
-      .catch(error => {
-        console.error("送信エラー:", error);
-        document.getElementById('loading-overlay').classList.add('hidden');
-        
-        // エラー通知を表示してメイン画面に戻る
+      .catch(function(error) {
+        console.error("Network error:", error);
+        document.getElementById('loading').classList.add('hidden');
         showToast("通信エラーが発生しました", true);
         showScreen('main-screen');
       });
     }
 
-    // --- 読み取りエラー（無視してOK） ---
-    function onScanError(errorMessage) {
-      // 常にスキャンし続けているため、QRが見つからないエラーは無視します
-    }
+    // --- スキャン中の微細なエラー（無視） ---
+    function onScanError(errorMessage) {}
 
   </script>
 </body>
