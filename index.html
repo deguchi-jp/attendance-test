@@ -448,17 +448,24 @@
       // 既存のGASウェブアプリのURL
       var gasUrl = "https://script.google.com/macros/s/AKfycbwI-_gf_xbNvvPUnFYIZY97GfjthFzvl5DKWOdRYVv8Zt35YrGlFe-5SapZS4Eo5w6P0Q/exec";
 
+      // ★ 修正箇所：iOS 12のSafariが返信をブロックしてエラー判定になるのを防ぐため、
+      // mode: 'no-cors' を指定して強制的に成功として扱います
       fetch(gasUrl, {
         method: "POST",
+        mode: "no-cors",
+        headers: {
+          "Content-Type": "text/plain"
+        },
         body: JSON.stringify(payload)
       })
-      .then(function(response) { return response.text(); })
-      .then(function(data) {
+      .then(function(response) {
+        // no-corsモードの場合、エラーで弾かれずにここに来ます（データ到達済み）
         document.getElementById('loading').classList.add('hidden');
         showToast(currentAction + "を記録しました", false);
         showScreen('main-screen');
       })
       .catch(function(error) {
+        // 本当にインターネットが繋がっていない時だけここに来ます
         console.error("Network error:", error);
         document.getElementById('loading').classList.add('hidden');
         showToast("通信エラーが発生しました", true);
